@@ -1,49 +1,79 @@
 // src/js/ui/post/view.js
 
-import { readPost } from '../../api/post.js';
-import { displayError } from '../../utilities/errorHandler.js';
+import { readPosts } from '../../api/post.js';
 
-document.addEventListener('DOMContentLoaded', async () => {
-  // Get the post ID from the URL 
-  const urlParams = new URLSearchParams(window.location.search);
-  const id = urlParams.get('id');
+let currentPage = 1;
+let postsPerPage = 12;
 
-  if (!id) {
-    displayError('No post ID specified.');
-    return;
-  }
-
-  try {
-    // Fetch the post data using the API
-    const response = await readPost(id);
-    console.log('Post Data:', response); // Log the entire response to verify structure
-
-    // Extract post data from the response
-    const post = response.data;
-
-    // Check if post data is available
-    if (!post) {
-      displayError('No post data found.');
-      return;
-    }
-
-    // Populate existing HTML elements with post data
-    document.getElementById('title').textContent = post.title || 'No Title Available';
-    document.getElementById('body').textContent = post.body || 'No Content Available';
-
-    // Check if post.tags is defined and is an array
-    const tagsElement = document.getElementById('tags');
-    if (Array.isArray(post.tags) && post.tags.length > 0) {
-      tagsElement.textContent = `Tags: ${post.tags.join(', ')}`;
-    } else {
-      tagsElement.textContent = 'No tags';
-    }
-
-    // Set the edit link URL to include the post ID
-    const editLink = document.getElementById('editLink');
-    editLink.href = `/post/edit/index.html?id=${id}`;
-
-  } catch (error) {
-    displayError(error.message || 'Failed to load post.');
-  }
+document.addEventListener('DOMContentLoaded', () => {
+  loadPosts(currentPage, postsPerPage);
+  setupPaginationControls();
 });
+
+// Load posts based on the current page and limit
+async function loadPosts(page, limit) {
+  try {
+    const posts = await readPosts(page, limit);
+    const postList = document.getElementById('postList');
+    postList.innerHTML = ''; // Clear existing posts
+
+    posts.forEach(post => {
+      const postCard = document.createElement('div');
+      postCard.className = 'col-md-4 mb-4';
+      postCard.innerHTML = `
+        <div class="card h-100 shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title">${post.title || 'Untitled'}</h5>
+            <p class="card-text">${post.body ? post.body.slice(0, 100) + '...' : 'No Content Available'}</p>
+            <a href="/post/index.html?id=${post.id}" class="btn btn-primary">Read More</a>
+          </div>
+        </div>
+      `;
+      postList.appendChild(postCard);
+    });
+  } catch (error) {
+    console.error('Failed to load posts:', error);
+  }
+}
+
+// Set up pagination control listeners
+function setupPaginationControls() {
+  document.querySelectorAll('[data-page]').forEach(btn => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      const page = parseInt(btn.getAttribute('data-page'));
+      goToPage(page);
+    });
+  });
+
+  document.querySelectorAll('[data-limit]').forEach(btn => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      const limit = parseInt(btn.getAttribute('data-limit'));
+      setPostsPerPage(limit);
+    });
+  });
+}
+
+// Go to a specific page
+function goToPage(page) {
+  currentPage = page;
+  loadPosts(currentPage, postsPerPage);
+  updateUrlParams();
+}
+
+// Set the number of posts per page
+function setPostsPerPage(limit) {
+  postsPerPage = limit;
+  currentPage = 1; // Reset to the first page
+  loadPosts(currentPage, postsPerPage);
+  updateUrlParams();
+}
+
+// Update URL parameters to reflect the current page and limit
+function updateUrlParams() {
+  const url = new URL(window.location);
+  url.searchParams.set('page', currentPage);
+  url.searchParams.set('limit', postsPerPage);
+  window.history.pushState({}, '', url);
+}
